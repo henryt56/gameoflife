@@ -1,39 +1,42 @@
 <?php
-    $message = '';
+session_start();
+require_once 'config.php';
 
-    if ($_SERVER["REQUEST_METHOD"] === "POST") {
-        $username = trim($_POST['username']);
-        $password = trim($_POST['password']);
+$message = '';
+
+if ($_SERVER["REQUEST_METHOD"] === "POST") {
+    $username = trim($_POST['username']);
+    $password = trim($_POST['password']);
+    $confirmPassword = trim($_POST['confirm_password']);
     
-        $file = 'users.txt';
-        $userExists = false;
-    
-        if (file_exists($file)) {
-            $lines = file($file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    
-            foreach ($lines as $line) {
-                list($existingUser, $existingPass) = explode(',', $line);
-                if ($existingUser === $username) {
-                    $userExists = true;
-                    break;
-                }
-            }
-        }
-    
-        if ($userExists) {
+    if ($password !== $confirmPassword) {
+        $message = "Passwords do not match.";
+    } else {
+        // Check if username exists
+        $stmt = $conn->prepare("SELECT id FROM users WHERE username = ?");
+        $stmt->bind_param("s", $username);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
             $message = "Username already exists. Please choose another.";
         } else {
-            $newUser = $username . ',' . $password . "\n";
-            file_put_contents($file, $newUser, FILE_APPEND);
-            $message = "Sign up successful! <a href='login.php'>Go to login</a>";
+            // Hash the password
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            
+            // Insert new user
+            $stmt = $conn->prepare("INSERT INTO users (username, password) VALUES (?, ?)");
+            $stmt->bind_param("ss", $username, $hashedPassword);
+            
+            if ($stmt->execute()) {
+                $message = "Sign up successful! <a href='login.php'>Go to login</a>";
+            } else {
+                $message = "Error: " . $stmt->error;
+            }
         }
-    }    
-
-
-
+    }
+}
 ?>
-
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -52,12 +55,11 @@
         <form action="signup.php" method="POST">
             <input type="text" name="username" placeholder="Username" required><br><br>
             <input type="password" name="password" placeholder="Password" required><br><br>
+            <input type="password" name="confirm_password" placeholder="Confirm Password" required><br><br>
             <button type="submit">Sign Up</button>
         </form>
+        <p>Already have an account? <a href="login.php">Login here</a></p>
+        <p><a href="index.html">Back to Home</a></p>
     </div>
-
-
 </body>
 </html>
-
-<?php
